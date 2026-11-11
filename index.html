@@ -92,8 +92,8 @@
 
   <div class="card">
     <div class="switch"><span>打开页面时自动签到(每账号每天一次)</span><input type="checkbox" id="autoSign" onchange="saveSettings()"></div>
-    <label>Bark 推送 Key(可选,iPhone 装了 Bark 才填)</label>
-    <input id="barkKey" placeholder="Bark 的 key,留空不推送" onchange="saveSettings()">
+    <label>ShowDoc 推送地址(可选,签到后推送到微信/手机;填写后每次签到都会推送结果)</label>
+    <input id="barkKey" placeholder="https://push.showdoc.com.cn/server/api/push/你的token" onchange="saveSettings()">
     <div class="btns"><button class="ghost mini" onclick="testBark()">测试推送</button></div>
   </div>
 
@@ -118,7 +118,7 @@
         &nbsp;&nbsp;&nbsp;名称 <code>NINEBOT_ACCOUNTS</code>,值:<br>
         <pre>[{"name":"主号","token":"eyJ...","deviceId":""}]</pre>
         3. Actions 页面手动跑一次 <code>ninebot-checkin</code> 验证,之后每天北京时间 9 点左右自动签到<br>
-        4. (可选)再加一个 secret <code>BARK_KEY</code>,签到结果推送到手机
+        4. (可选)再加一个 secret <code>SHOWDOC_PUSH_URL</code>(ShowDoc 推送地址,签到结果实时推送)
       </div>
     </details>
     <details>
@@ -251,11 +251,13 @@ function pushBark() {
   const okN = accounts.filter(a => a.last && a.last.ok).length;
   const lines = accounts.map(a => (a.last && a.last.ok ? "✅ " : "❌ ") + a.name + ": " +
     (a.last ? a.last.text + (a.last.days ? "(连续" + a.last.days + "天)" : "") : "未运行")).join("\n");
-  const url = "https://api.day.app/" + encodeURIComponent(settings.barkKey) + "/" +
-    encodeURIComponent("九号签到 " + okN + "/" + accounts.length) + "/" +
-    encodeURIComponent(lines) + "?group=ninebot-checkin";
-  fetch(url).then(r => r.json()).then(j => logLine("Bark: " + JSON.stringify(j).slice(0, 120)))
-            .catch(e => logLine("Bark 失败: " + e));
+  if (!settings.barkKey) { logLine("未配置 ShowDoc 推送地址, 跳过推送"); return; }
+  const ok = settings.barkKey.replace(/\/+$/, "");
+  const url = ok + "?title=" + encodeURIComponent("九号签到 " + (okN === accounts.length ? "全部成功 🎉" : "有失败 ❌") + " " + okN + "/" + accounts.length) +
+    "&content=" + encodeURIComponent(lines);
+  // ShowDoc 无 CORS 头, 用 no-cors 发出(GET 会送达, 只是读不到响应)
+  fetch(url, { mode: "no-cors" }).then(() => logLine("ShowDoc 推送已发出"))
+    .catch(e => logLine("ShowDoc 推送失败: " + e));
 }
 function testBark() {
   if (!settings.barkKey) return toast("先填写 Bark Key");

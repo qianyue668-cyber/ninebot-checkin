@@ -21,5 +21,6 @@ jobs:
       - name: Run checkin
         env:
           NINEBOT_ACCOUNTS: ${{ secrets.NINEBOT_ACCOUNTS }}
+          SHOWDOC_PUSH_URL: ${{ secrets.SHOWDOC_PUSH_URL }}
           BARK_KEY: ${{ secrets.BARK_KEY }}
         run: python checkin.py

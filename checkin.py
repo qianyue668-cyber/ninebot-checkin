@@ -31,6 +31,10 @@ TIMEOUT = 25
 
 
 def log(msg):
+    try:
+        sys.stdout.reconfigure(errors="replace")  # Windows GBK 控制台打 emoji 不崩
+    except Exception:
+        pass
     print(time.strftime("[%Y-%m-%d %H:%M:%S]"), msg, flush=True)
 
 
@@ -97,6 +101,22 @@ def bark_push(key, title, body):
             log("Bark 推送: " + r.read().decode("utf-8", "replace")[:120])
     except Exception as e:
         log("Bark 推送失败: " + str(e))
+
+
+def showdoc_push(url, title, content):
+    """ShowDoc 推送(全 UTF-8, 成功/失败都会推送)"""
+    if not url:
+        return
+    try:
+        data = urllib.parse.urlencode({"title": title, "content": content}).encode("utf-8")
+        req = urllib.request.Request(url, data=data, headers={
+            "Content-Type": "application/x-www-form-urlencoded; charset=utf-8"})
+        with urllib.request.urlopen(req, timeout=15) as r:
+            resp = json.loads(r.read().decode("utf-8", "replace"))
+            ok = resp.get("error_code") == 0
+            log(f"ShowDoc 推送{'成功' if ok else '失败: ' + str(resp)}")
+    except Exception as e:
+        log("ShowDoc 推送异常: " + str(e))
 
 
 def run_account(acc, idx):
@@ -180,8 +200,16 @@ def main():
         mark = "✅" if r["ok"] else "❌"
         lines.append(f"{mark} {r['name']}: {r['msg']}")
         log(f"{mark} {r['name']}: {r['msg']}")
-    bark_push(os.environ.get("BARK_KEY", ""), "九号出行签到结果", "\n".join(lines))
-    sys.exit(0 if all(r["ok"] for r in results) else 1)
+
+    all_ok = all(r["ok"] for r in results)
+    summary = "\n".join(lines)
+    title = "九号签到: 全部成功 🎉" if all_ok else "九号签到: 有失败 ❌"
+    if not all_ok:
+        failed = [l for l in lines if l.startswith("❌")]
+        title = f"九号签到: {len(failed)}/{len(lines)} 个账号失败 ❌"
+    showdoc_push(os.environ.get("SHOWDOC_PUSH_URL", "").strip(), title, summary or "(无结果)")
+    bark_push(os.environ.get("BARK_KEY", ""), "九号出行签到结果", summary)
+    sys.exit(0 if all_ok else 1)
 
 
 if __name__ == "__main__":

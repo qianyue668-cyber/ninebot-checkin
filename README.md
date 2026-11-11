@@ -51,7 +51,7 @@ python login_helper.py
      ```json
      [{"name":"主号","token":"eyJ...","deviceId":""}]
      ```
-   - 可选:`BARK_KEY`(iPhone Bark 推送)
+   - 可选:`SHOWDOC_PUSH_URL`(ShowDoc 推送地址,形如 `https://push.showdoc.com.cn/server/api/push/xxxx`,每次签到后推送成功/失败结果)
 3. Actions → ninebot-checkin → **Run workflow** 手动跑一次验证
 4. 之后每天 UTC 01:00(北京 9 点左右)自动执行,结果可推送 Bark
 
