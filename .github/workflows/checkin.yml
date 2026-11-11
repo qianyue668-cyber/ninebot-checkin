@@ -1,0 +1,25 @@
+name: ninebot-checkin
+
+on:
+  schedule:
+    - cron: "0 1 * * *" # UTC 01:00 = 北京时间每天 09:00(GitHub 可能有几十分钟延迟)
+  workflow_dispatch: {} # 支持在 Actions 页面手动触发
+
+permissions: {}
+
+jobs:
+  checkin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run checkin
+        env:
+          NINEBOT_ACCOUNTS: ${{ secrets.NINEBOT_ACCOUNTS }}
+          BARK_KEY: ${{ secrets.BARK_KEY }}
+        run: python checkin.py

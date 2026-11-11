@@ -1,0 +1,5 @@
+# 永远不要把真实 token 提交进仓库!
+ninebot_token*.json
+*.log
+__pycache__/
+.DS_Store

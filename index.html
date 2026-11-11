@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>九号出行 · 自动签到助手</title>
+<style>
+  :root { --bg:#f4f5f7; --card:#fff; --ink:#111; --sub:#888; --line:#e8e8ec;
+          --ok:#0a7a3d; --okbg:#e8f7ee; --warn:#b7791f; --warnbg:#fdf3e0;
+          --err:#c0392b; --errbg:#fdecec; --accent:#111; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:system-ui,-apple-system,"Microsoft YaHei",sans-serif; background:var(--bg);
+         color:var(--ink); min-height:100vh; padding:16px 12px 40px; }
+  .wrap { max-width:520px; margin:0 auto; }
+  header h1 { font-size:22px; letter-spacing:.5px; }
+  header .sub { color:var(--sub); font-size:13px; margin:6px 0 18px; line-height:1.6; }
+  .card { background:var(--card); border-radius:14px; box-shadow:0 4px 18px rgba(0,0,0,.06);
+          padding:18px 16px; margin-bottom:14px; }
+  .summary { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .summary .num { font-size:15px; font-weight:600; }
+  .summary .num small { color:var(--sub); font-weight:400; }
+  button { border:none; border-radius:9px; background:var(--accent); color:#fff;
+           font-size:14px; font-weight:600; padding:10px 16px; cursor:pointer; }
+  button:disabled { background:#c9c9cf; cursor:not-allowed; }
+  button.ghost { background:#fff; color:var(--ink); border:1.5px solid var(--ink); }
+  button.mini { padding:6px 12px; font-size:12.5px; border-radius:7px; }
+  button.danger { background:#fff; color:var(--err); border:1.5px solid #f2c4c0; }
+  label { display:block; font-size:12.5px; font-weight:600; color:#555; margin:12px 0 5px; }
+  input, textarea { width:100%; border:1px solid var(--line); border-radius:8px; padding:9px 11px;
+                    font-size:14px; background:#fff; }
+  input:focus, textarea:focus { outline:2px solid var(--ink); border-color:transparent; }
+  textarea { min-height:74px; font-family:ui-monospace,monospace; font-size:12px; word-break:break-all; }
+  .acct { border:1px solid var(--line); border-radius:12px; padding:13px 14px; margin-top:12px; }
+  .acct .row1 { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+  .acct .name { font-weight:700; font-size:15px; }
+  .acct .meta { color:var(--sub); font-size:12px; margin-top:5px; line-height:1.7; word-break:break-all; }
+  .badge { display:inline-block; font-size:12px; font-weight:600; border-radius:999px;
+           padding:3px 10px; margin-left:8px; vertical-align:1px; }
+  .b-ok { background:var(--okbg); color:var(--ok); }
+  .b-warn { background:var(--warnbg); color:var(--warn); }
+  .b-err { background:var(--errbg); color:var(--err); }
+  .btns { display:flex; gap:8px; margin-top:11px; flex-wrap:wrap; }
+  .switch { display:flex; align-items:center; justify-content:space-between; margin:10px 0 2px; font-size:14px; }
+  .switch input { width:20px; height:20px; }
+  details { margin-top:6px; }
+  summary { cursor:pointer; font-weight:700; font-size:14.5px; padding:6px 0; }
+  .doc { font-size:13.5px; line-height:1.9; color:#333; }
+  .doc code { background:#f0f0f4; border-radius:5px; padding:1px 6px;
+              font-family:ui-monospace,monospace; font-size:12px; }
+  .doc pre { background:#14161a; color:#d6e2ff; border-radius:10px; padding:12px 14px;
+             overflow:auto; font-size:12px; line-height:1.7; margin:8px 0; }
+  .doc b.th { color:var(--ink); }
+  #log { font-family:ui-monospace,monospace; font-size:11.5px; line-height:1.8; color:#555;
+         max-height:180px; overflow:auto; white-space:pre-wrap; }
+  .foot { text-align:center; color:#b5b5bc; font-size:11.5px; margin-top:22px; line-height:1.8; }
+  .toast { position:fixed; left:50%; bottom:26px; transform:translateX(-50%); background:#111;
+           color:#fff; padding:10px 18px; border-radius:10px; font-size:13px; opacity:0;
+           pointer-events:none; transition:opacity .25s; max-width:86vw; }
+  .toast.show { opacity:.95; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>九号出行 · 自动签到助手</h1>
+    <div class="sub">纯本地工具:token 只存在你的浏览器里,请求只发往九号官方网关。配合 GitHub Actions 可实现每天全自动签到。</div>
+  </header>
+
+  <div class="card">
+    <div class="summary">
+      <div class="num" id="sum">共 0 个账号</div>
+      <div style="display:flex; gap:8px;">
+        <button class="ghost mini" onclick="signAll(this)">全部签到</button>
+        <button class="mini" onclick="showAdd()">添加账号</button>
+      </div>
+    </div>
+    <div id="accounts"></div>
+
+    <div id="addBox" style="display:none; margin-top:14px; border-top:1px dashed var(--line); padding-top:6px;">
+      <label>备注名</label>
+      <input id="f_name" placeholder="如:主号">
+      <label>token(必填,eyJ 开头的 JWT,裸 token 不带 Bearer)</label>
+      <textarea id="f_token" placeholder="粘贴 accessToken"></textarea>
+      <label>deviceId(可选,一般留空即可)</label>
+      <input id="f_device" placeholder="留空">
+      <div class="btns">
+        <button onclick="saveAccount()">保存</button>
+        <button class="ghost" onclick="hideAdd()">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="switch"><span>打开页面时自动签到(每账号每天一次)</span><input type="checkbox" id="autoSign" onchange="saveSettings()"></div>
+    <label>Bark 推送 Key(可选,iPhone 装了 Bark 才填)</label>
+    <input id="barkKey" placeholder="Bark 的 key,留空不推送" onchange="saveSettings()">
+    <div class="btns"><button class="ghost mini" onclick="testBark()">测试推送</button></div>
+  </div>
+
+  <div class="card">
+    <details>
+      <summary>📖 token 怎么拿?(免抓包,约 30 天有效)</summary>
+      <div class="doc">
+        <b class="th">方式一:免抓包验证码登录(推荐)</b><br>
+        在电脑上下载本仓库的 <code>login_helper.py</code>,运行:<br>
+        <pre>python login_helper.py
+# 浏览器打开 http://127.0.0.1:8787</pre>
+        拖动官方滑块 → 收短信填验证码 → 登录成功后页面显示 token,复制粘贴到上面即可。
+        <b class="th">方式二:一次抓包(备选)</b><br>
+        用 Stream(iOS)/ Reqable(安卓)抓九号 App 签到页,搜 <code>api/user-sign/v2/sign</code>,取请求头 <code>Authorization</code> 里的 <code>eyJ...</code> 部分(不要带 Bearer)。
+      </div>
+    </details>
+    <details>
+      <summary>🤖 怎么让它每天全自动?(GitHub Actions)</summary>
+      <div class="doc">
+        1. Fork / 推送本仓库到 GitHub(可设为 <b>Private</b>)<br>
+        2. 仓库 Settings → Secrets and variables → Actions → New repository secret<br>
+        &nbsp;&nbsp;&nbsp;名称 <code>NINEBOT_ACCOUNTS</code>,值:<br>
+        <pre>[{"name":"主号","token":"eyJ...","deviceId":""}]</pre>
+        3. Actions 页面手动跑一次 <code>ninebot-checkin</code> 验证,之后每天北京时间 9 点左右自动签到<br>
+        4. (可选)再加一个 secret <code>BARK_KEY</code>,签到结果推送到手机
+      </div>
+    </details>
+    <details>
+      <summary>🔐 隐私与说明</summary>
+      <div class="doc">
+        • token 只保存在<b>你自己的浏览器 localStorage</b>(或 GitHub Secrets),本页面无任何服务器、无统计<br>
+        • 所有请求直接发往九号官方:<code>cn-cbu-gateway.ninebot.com</code>(签到)、<code>api.day.app</code>(可选推送)<br>
+        • token 约 <b>30 天过期</b>,页面会在到期前 3 天标红提醒,过期后用 login_helper.py 重新获取<br>
+        • 个人自动化工具,请自行评估与平台条款的冲突,请勿用于商业用途
+      </div>
+    </details>
+    <details>
+      <summary>🧾 运行日志</summary>
+      <div id="log">(空)</div>
+    </details>
+  </div>
+
+  <div class="foot">九号出行自动签到助手 · 本页为纯静态工具,不收集任何数据</div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const LS_ACC = "nb_accounts_v1", LS_SET = "nb_settings_v1";
+const GW = "https://cn-cbu-gateway.ninebot.com";
+
+let accounts = [];
+let settings = { autoSign: true, barkKey: "" };
+
+function load() {
+  try { accounts = JSON.parse(localStorage.getItem(LS_ACC) || "[]"); } catch (e) { accounts = []; }
+  try { settings = Object.assign(settings, JSON.parse(localStorage.getItem(LS_SET) || "{}")); } catch (e) {}
+}
+function persist() {
+  localStorage.setItem(LS_ACC, JSON.stringify(accounts));
+  localStorage.setItem(LS_SET, JSON.stringify(settings));
+}
+function today() {
+  const d = new Date();
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+}
+function logLine(s) {
+  const box = $("log");
+  box.textContent = (box.textContent === "(空)" ? "" : box.textContent) + "[" + new Date().toLocaleTimeString() + "] " + s + "\n";
+  box.scrollTop = box.scrollHeight;
+}
+function toast(s) {
+  const t = $("toast"); t.textContent = s; t.classList.add("show");
+  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), 2600);
+}
+
+function jwtExp(token) {
+  try {
+    const p = token.split(".")[1]; const j = JSON.parse(atob(p.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(p.length / 4) * 4, "=")));
+    return j.exp || 0;
+  } catch (e) { return 0; }
+}
+function expInfo(token) {
+  const exp = jwtExp(token);
+  if (!exp) return { text: "token 格式异常", expired: true, soon: true };
+  const left = exp - Date.now() / 1000;
+  if (left <= 0) return { text: "token 已过期", expired: true, soon: true };
+  const d = Math.floor(left / 86400);
+  return { text: "约 " + d + " 天后过期", expired: false, soon: d < 3 };
+}
+
+async function gw(method, path, token, body) {
+  const headers = {
+    "Accept": "application/json, text/plain, */*",
+    "language": "zh",
+    "Authorization": token,          // 裸 token,不要加 Bearer
+    "Origin": "https://h5-bj.ninebot.com",
+    "Referer": "https://h5-bj.ninebot.com/"
+  };
+  if (body !== undefined) headers["Content-Type"] = "application/json";
+  const r = await fetch(GW + path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+  return r.json();
+}
+
+async function checkAccount(acc, silent) {
+  const now = Date.now();
+  acc.lastRun = now;
+  try {
+    const st = await gw("GET", "/portal/api/user-sign/v2/status?t=" + now, acc.token);
+    if (st.code !== 0) {
+      acc.last = { date: today(), ok: false, text: "状态查询失败:" + (st.msg || "token 失效?"), days: 0 };
+      logLine("[" + acc.name + "] " + acc.last.text);
+      return acc.last;
+    }
+    const d = st.data || {};
+    acc.days = d.consecutiveDays || 0;
+    if (d.currentSignStatus === 1) {
+      acc.last = { date: today(), ok: true, text: "已签到", days: acc.days };
+      logLine("[" + acc.name + "] 今日已签到,连续 " + acc.days + " 天");
+      return acc.last;
+    }
+    const body = acc.deviceId ? { deviceId: acc.deviceId } : {};
+    const r = await gw("POST", "/portal/api/user-sign/v2/sign", acc.token, body);
+    if (r.code === 0) {
+      const st2 = await gw("GET", "/portal/api/user-sign/v2/status?t=" + Date.now(), acc.token);
+      const days = st2.code === 0 ? (st2.data || {}).consecutiveDays : acc.days;
+      acc.last = { date: today(), ok: true, text: "签到成功", days: days || (acc.days + 1) };
+      logLine("[" + acc.name + "] 签到成功!连续 " + acc.last.days + " 天");
+    } else if (r.code === 540004 || /already signed/i.test(r.msg || "")) {
+      acc.last = { date: today(), ok: true, text: "已签到", days: acc.days };
+      logLine("[" + acc.name + "] 已签到(接口返回重复签)");
+    } else {
+      acc.last = { date: today(), ok: false, text: "签到失败: " + (r.msg || r.code), days: acc.days };
+      logLine("[" + acc.name + "] " + acc.last.text);
+    }
+  } catch (e) {
+    acc.last = { date: today(), ok: false, text: "网络错误: " + (e.message || e), days: acc.days || 0 };
+    logLine("[" + acc.name + "] " + acc.last.text);
+  }
+  return acc.last;
+}
+
+async function signAll(btn) {
+  if (btn) { btn.disabled = true; btn.textContent = "签到中..."; }
+  for (const acc of accounts) await checkAccount(acc);
+  persist(); render();
+  const okN = accounts.filter(a => a.last && a.last.ok).length;
+  toast("签到完成:" + okN + "/" + accounts.length);
+  if (settings.barkKey) pushBark();
+  if (btn) { btn.disabled = false; btn.textContent = "全部签到"; }
+}
+
+function pushBark() {
+  const okN = accounts.filter(a => a.last && a.last.ok).length;
+  const lines = accounts.map(a => (a.last && a.last.ok ? "✅ " : "❌ ") + a.name + ": " +
+    (a.last ? a.last.text + (a.last.days ? "(连续" + a.last.days + "天)" : "") : "未运行")).join("\n");
+  const url = "https://api.day.app/" + encodeURIComponent(settings.barkKey) + "/" +
+    encodeURIComponent("九号签到 " + okN + "/" + accounts.length) + "/" +
+    encodeURIComponent(lines) + "?group=ninebot-checkin";
+  fetch(url).then(r => r.json()).then(j => logLine("Bark: " + JSON.stringify(j).slice(0, 120)))
+            .catch(e => logLine("Bark 失败: " + e));
+}
+function testBark() {
+  if (!settings.barkKey) return toast("先填写 Bark Key");
+  pushBark(); toast("测试推送已发送");
+}
+
+function render() {
+  const box = $("accounts"); box.innerHTML = "";
+  let signed = 0;
+  accounts.forEach((acc, i) => {
+    const ei = expInfo(acc.token);
+    if (acc.last && acc.last.date === today() && acc.last.ok) signed++;
+    const div = document.createElement("div");
+    div.className = "acct";
+    let badge = "";
+    if (ei.expired) badge = '<span class="badge b-err">token ' + ei.text + '</span>';
+    else if (acc.last && acc.last.date === today())
+      badge = acc.last.ok ? '<span class="badge b-ok">今日' + acc.last.text + (acc.last.days ? " · 连" + acc.last.days + "天" : "") + '</span>'
+                          : '<span class="badge b-err">' + acc.last.text + '</span>';
+    else badge = '<span class="badge b-warn">今日未签</span>';
+    div.innerHTML =
+      '<div class="row1"><div class="name">' + esc(acc.name) + badge + '</div>' +
+      '<button class="danger mini" data-del="' + i + '">删除</button></div>' +
+      '<div class="meta">token ' + esc(acc.token.slice(0, 16)) + "…" + esc(acc.token.slice(-8)) +
+      ' · ' + ei.text + (ei.soon && !ei.expired ? " ⚠️即将过期" : "") +
+      (acc.deviceId ? " · deviceId " + esc(acc.deviceId) : "") + '</div>' +
+      '<div class="btns"><button class="ghost mini" data-go="' + i + '">签到 / 刷新</button></div>';
+    box.appendChild(div);
+  });
+  box.querySelectorAll("[data-del]").forEach(b => b.onclick = () => {
+    const i = +b.dataset.del;
+    if (confirm("删除账号「" + accounts[i].name + "」?")) { accounts.splice(i, 1); persist(); render(); }
+  });
+  box.querySelectorAll("[data-go]").forEach(b => b.onclick = async () => {
+    b.disabled = true;
+    await checkAccount(accounts[+b.dataset.go]);
+    persist(); render();
+  });
+  $("sum").innerHTML = "今日 <span style='color:var(--ok)'>" + signed + "</span> / " + accounts.length +
+    " 已签 <small>· " + (settings.autoSign ? "自动签到开" : "自动签到关") + "</small>";
+}
+function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+
+function showAdd() { $("addBox").style.display = "block"; }
+function hideAdd() { $("addBox").style.display = "none"; $("f_token").value = ""; }
+function saveAccount() {
+  const token = $("f_token").value.trim().replace(/^Bearer\s+/i, "");
+  if (!/^eyJ/.test(token)) return toast("token 应该是 eyJ 开头的 JWT");
+  const name = $("f_name").value.trim() || ("账号" + (accounts.length + 1));
+  accounts.push({ name, token, deviceId: $("f_device").value.trim(), last: null });
+  persist(); render(); hideAdd(); $("f_name").value = ""; $("f_token").value = ""; $("f_device").value = "";
+  toast("已保存,正在测试...");
+  checkAccount(accounts[accounts.length - 1]).then(() => { persist(); render(); });
+}
+function saveSettings() {
+  settings.autoSign = $("autoSign").checked;
+  settings.barkKey = $("barkKey").value.trim();
+  persist(); render();
+}
+
+(async function init() {
+  load();
+  $("autoSign").checked = settings.autoSign;
+  $("barkKey").value = settings.barkKey;
+  render();
+  if (settings.autoSign && accounts.length) {
+    const todo = accounts.filter(a => !a.last || a.last.date !== today());
+    if (todo.length) {
+      logLine("自动签到开始(" + todo.length + " 个账号)...");
+      for (const acc of todo) await checkAccount(acc);
+      persist(); render();
+      if (settings.barkKey) pushBark();
+    }
+  }
+})();
+</script>
+</body>
+</html>
